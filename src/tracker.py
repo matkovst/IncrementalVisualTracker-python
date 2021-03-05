@@ -79,8 +79,7 @@ def sklm(data, tmpl, ff):
 
 class IncrementalTracker():
 
-    def __init__(self, affsig, nsamples = 600, condenssig = 0.75, forgetting = 0.95, batchsize = 5, tmplShape = (32, 32), maxbasis = 16, errfunc = 'L2'):
-        self.affsig = affsig
+    def __init__(self, dof, affsig, nsamples = 600, condenssig = 0.75, forgetting = 0.95, batchsize = 5, tmplShape = (32, 32), maxbasis = 16, errfunc = 'L2'):
         self.nsamples = nsamples
         self.condenssig = condenssig
         self.forgetting = forgetting
@@ -89,6 +88,10 @@ class IncrementalTracker():
         self.tmplSize = self.tmplShape[0]*self.tmplShape[1]
         self.maxbasis = maxbasis
         self.errfunc = errfunc
+
+        if dof != affsig.size:
+            sys.exit('ValueError: dof and affsig size must be the same')
+        self.affsig = affsig
         self.dof = self.affsig.size # <- degrees of freedom
 
         self.trackerInitialized = False
@@ -136,7 +139,6 @@ class IncrementalTracker():
             self.init(gray, initialBox)
 
         self.estimateWarpCondensation(gray)
-        self.wimgs.append(self.param['wimg'].flatten('C'))
         
         # Do incremental update when we accumulate enough data
         if len(self.wimgs) >= self.batchsize:
@@ -184,11 +186,11 @@ class IncrementalTracker():
             idx = np.floor(idx).astype(np.int16)
             self.param['param'] = self.param['param'][idx, :]
 
-        # Dynamical model
+        # Apply dynamical model
         for i in range(self.nsamples):
                 self.param['param'][i, :] = DynamicalProcess(self.param['param'][i, :], self.affsig)
         
-        # Observation model
+        # Apply observation model
         _wimgs = warpimgs(gray, self.param['param'], self.tmplShape)
         wimgsFlatten = np.reshape(_wimgs, (self.tmplSize, self.nsamples))
         for i in range(self.nsamples):
@@ -227,7 +229,8 @@ class IncrementalTracker():
         self.param['wimg'] = _wimgs[:,:,maxidx]
         self.param['err'] = np.reshape(self.diff[:,maxidx], self.tmplShape)
         self.param['recon'] = self.param['wimg'] + self.param['err']
-        return self.param
+
+        self.wimgs.append(self.param['wimg'].flatten('C'))
 
     def getParam(self):
         return self.param

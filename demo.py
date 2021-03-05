@@ -53,7 +53,8 @@ if __name__ == "__main__":
 
     # Create tracker
     tracker = IncrementalTracker(
-        affsig = affsig, 
+        dof = 6,
+        affsig = AFFSIG, 
         nsamples = NSAMPLES,
         condenssig = CONDENSSIG, 
         forgetting = FORGETTING, 
@@ -107,6 +108,7 @@ if __name__ == "__main__":
         gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
         gray = np.float32(gray) / 255
 
+        # do tracking
         if frameNum == 1:
             w = initialBox[2] - initialBox[0]
             h = initialBox[3] - initialBox[1]

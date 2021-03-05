@@ -8,11 +8,11 @@ colorMap = plt.get_cmap('jet')
 def rad2deg(rad):
     return float((rad * 180) / np.pi)
 
-def subimage(image, center, theta, width, height, tmplsize, p):
+def subimage(image, center, width, height, tmplsize, angle):
     
     shape = ( image.shape[1], image.shape[0] )
-    deg = float((theta * 180) / np.pi)
-    M = cv.getRotationMatrix2D( center, -deg, 1.0 )
+    deg = -rad2deg(angle) # since y-axis begins on top opencv requires negative angle for clockwise rotation
+    M = cv.getRotationMatrix2D( center, deg, 1.0 )
     wimg = cv.warpAffine( image, M, shape )
     
     x1 = int( center[0] - width/2 )
@@ -27,22 +27,21 @@ def subimage(image, center, theta, width, height, tmplsize, p):
 def warpimg(img, p, sz):
     if not all(sz):
         sz = img.shape
-    if p.size == 6:
-        p = np.reshape(p, (6, 1))
+    if len(p.shape) == 1:
+        p = np.reshape(p, (1, p.size))
     tmplsize = sz[0]
     
-    center = (p[0,:], p[1,:])
-    angle = p[3,:]
-    width = int(p[2,:]*tmplsize)
-    height = int(width * p[4,:])
-    return subimage(img, center, angle, int(width), int(height), tmplsize, p)
+    center = (p[:, 0], p[:, 1])
+    angle = p[:, 3]
+    width = int(p[:, 2]*tmplsize)
+    height = int(width * p[:, 4])
+    return subimage(img, center, int(width), int(height), tmplsize, angle)
 
 def warpimgs(img, p, sz):
-
     if not all(sz):
         sz = img.shape
-    if p.size == 6:
-        p = np.reshape(p, (1, 6))
+    if len(p.shape) == 1:
+        p = np.reshape(p, (1, p.size))
     tmplsize = sz[0]
     
     nsamples = p.shape[0]
@@ -52,7 +51,7 @@ def warpimgs(img, p, sz):
     height = ( p[:, 4] * width )
     wimgs = np.zeros((tmplsize, tmplsize, nsamples))
     for i in range(nsamples):
-        wimgs[:,:,i] = subimage(img, (int(center[0][i]), int(center[1][i])), angle[i], int(width[i]), int(height[i]), tmplsize, p[i, :])
+        wimgs[:,:,i] = subimage(img, (int(center[0][i]), int(center[1][i])), int(width[i]), int(height[i]), tmplsize, angle[i])
     return wimgs
 
 def convert(img, target_type_min, target_type_max, target_type):
