@@ -5,15 +5,14 @@ import matplotlib.pyplot as plt
 colorMap = plt.get_cmap('jet')
 
 
-def subimage(image, center, theta, width, height, tmplsize):
-    ''' 
-    Rotates OpenCV image around center with angle theta (in deg)
-    then crops the image according to width and height.
-    '''
+def rad2deg(rad):
+    return float((rad * 180) / np.pi)
 
-    #deg = float((theta * 180) / np.pi)
-    shape = ( image.shape[1], image.shape[0] ) # cv.warpAffine expects shape in (length, height)
-    M = cv.getRotationMatrix2D( center, theta, 1.0 ) # TODO: radians to degrees
+def subimage(image, center, theta, width, height, tmplsize, p):
+    
+    shape = ( image.shape[1], image.shape[0] )
+    deg = float((theta * 180) / np.pi)
+    M = cv.getRotationMatrix2D( center, -deg, 1.0 )
     wimg = cv.warpAffine( image, M, shape )
     
     x1 = int( center[0] - width/2 )
@@ -21,14 +20,6 @@ def subimage(image, center, theta, width, height, tmplsize):
     x1 = x1 if x1 >= 0 else 0
     y1 = y1 if y1 >= 0 else 0
     wimg = wimg[ y1:y1+height, x1:x1+width ]
-
-    # x1 = int( center[0] - width/2 )
-    # x1 = x1 if x1 >= 0 else 0
-    # x2 = (x1 + width) if (x1 + width) > wimg.shape[1] else wimg.shape[1]
-    # y1 = int( center[1] - height/2 )
-    # y1 = y1 if y1 >= 0 else 0
-    # y2 = (y1 + height) if (y1 + height) > wimg.shape[0] else wimg.shape[0]
-    # wimg = wimg[ y1:y2, x1:x2 ]
 
     wimg = cv.resize(wimg, (tmplsize, tmplsize), None, cv.INTER_LINEAR, cv.BORDER_CONSTANT, 0)
     return wimg
@@ -44,7 +35,7 @@ def warpimg(img, p, sz):
     angle = p[3,:]
     width = int(p[2,:]*tmplsize)
     height = int(width * p[4,:])
-    return subimage(img, center, angle, int(width), int(height), tmplsize)
+    return subimage(img, center, angle, int(width), int(height), tmplsize, p)
 
 def warpimgs(img, p, sz):
 
@@ -61,7 +52,7 @@ def warpimgs(img, p, sz):
     height = ( p[:, 4] * width )
     wimgs = np.zeros((tmplsize, tmplsize, nsamples))
     for i in range(nsamples):
-        wimgs[:,:,i] = subimage(img, (int(center[0][i]), int(center[1][i])), angle[i], int(width[i]), int(height[i]), tmplsize)
+        wimgs[:,:,i] = subimage(img, (int(center[0][i]), int(center[1][i])), angle[i], int(width[i]), int(height[i]), tmplsize, p[i, :])
     return wimgs
 
 def convert(img, target_type_min, target_type_max, target_type):
@@ -95,7 +86,7 @@ def makeDetailedFrame(fno, frame, tmpl, param, patchSize, timeElapsed = 0.0):
     rrectParam = param['est']
     rrectW = rrectParam[2]*patchSize[0]
     rrectH = rrectW*rrectParam[4]
-    rrect = ((rrectParam[0], rrectParam[1]), (rrectW, rrectH), rrectParam[3])
+    rrect = ((rrectParam[0], rrectParam[1]), (rrectW, rrectH), -rad2deg(rrectParam[3]))
     rrectBox = np.int0( cv.boxPoints(rrect) )
     cv.drawContours(originalFrame, [rrectBox], 0 ,(0, 0, 255), 2)
     cv.drawContours(detailedFrame, [rrectBox], 0 ,(255, 127, 0), 2)

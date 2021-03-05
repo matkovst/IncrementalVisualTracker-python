@@ -33,21 +33,23 @@ def on_mouse(event, x, y, flags, params):
     initialBox[[0,2]] = np.sort(initialBox[[0,2]])
     initialBox[[1,3]] = np.sort(initialBox[[1,3]])
 
-# python demo.py -i C:/Users/Stanislav/Videos/david_indoor.avi -r 160 106 62 78 -0.02 -d 1
-# python demo.py -i C:/Users/Stanislav/Videos/Greece.mp4 -r 170 110 52 78 -0.02 -d 1 -z 0.1
+
 if __name__ == "__main__":
     print("[INFO] Program started")
 
     # Parse command line params
     parser = argparse.ArgumentParser(description='Incremental visual tracker.')
     parser.add_argument('-i', '--input', metavar='Input', type=str, help='input file')
-    parser.add_argument('-r', '--rect', metavar='Rotated rect', type=float, nargs='+', help='Object location on first frame')
-    parser.add_argument('-z', '--resize', metavar='Resize', type=float, help='Resize rate', default = 1.0)
     parser.add_argument('-d', '--debug', metavar='Debug', type=int, help='do show debug')
+    parser.add_argument('-t', '--test', metavar='Test', type=int, help='do test', default = 0)
     args = parser.parse_args()
-    resizeRate = args.resize
 
-    File = open("tests/python-est-data.txt", "r") # <- for testing
+    File = None
+    if args.test == 1:
+        try:
+            File = open("tests/matlab-data.txt", "r") # <- for testing
+        except:
+            print("[INFO] Skip tests")
 
     # Create tracker
     tracker = IncrementalTracker(
@@ -67,19 +69,20 @@ if __name__ == "__main__":
 
     # get first frame
     capture = cv.VideoCapture(args.input)
-    for _ in range(299):
-        capture.read()
+    if args.test == 1: # <- for testing
+        for _ in range(299):
+            capture.read()
 
     writer = None
     ret, frame0 = capture.read()
-    frame0 = cv.resize(frame0, (0, 0), None, resizeRate, resizeRate)
+    frame0 = cv.resize(frame0, (0, 0), None, RESIZE_RATE, RESIZE_RATE)
 
     frameNum = 0
     Error = 0.0
     while ret and capture.isOpened():
         if frameNum > 0:
             ret, frame = capture.read()
-            frame = cv.resize(frame, (0, 0), None, resizeRate, resizeRate)
+            frame = cv.resize(frame, (0, 0), None, RESIZE_RATE, RESIZE_RATE)
         else:
             frame = frame0
         if not ret:
@@ -135,9 +138,10 @@ if __name__ == "__main__":
             cv.resizeWindow(winName, frame.shape[1], frame.shape[0])
             cv.imshow(winName, frame)
 
-        true = [ float(val) for val in File.readline().split() ]
-        Error += np.linalg.norm(param['est'] - np.array(true))
-        print(Error)
+        if File is not None:
+            true = [ float(val) for val in File.readline().split() ]
+            Error += np.linalg.norm(param['est'] - np.array(true))
+            print(Error)
         # -------------------- //// -------------------- #
 
         frameNum += 1
@@ -145,7 +149,8 @@ if __name__ == "__main__":
         if key & 0xFF == ord('q') or key == 27:
             break
     
-    File.close()
+    if File is not None:
+        File.close()
     if writer is not None:
         writer.release()
     capture.release()
