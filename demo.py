@@ -92,19 +92,15 @@ if __name__ == "__main__":
             break
         
         if INITIAL_BOX is None:
-            while frameNum == 0 or mousedown:
+            while frameNum == 0 and not initialize:
                 drawImg = frame.copy()
                 cv.putText(drawImg, "Draw box around target object", (10, 20), cv.FONT_HERSHEY_PLAIN, 1.1, (0, 0, 255))
-                if mouseupdown:
-                    frameNum += 1
                 cv.rectangle(drawImg,
                         (int(initialBox[0]), int(initialBox[1])),
                         (int(initialBox[2]), int(initialBox[3])),
                         [0,0,255], 2)
                 cv.imshow(winName, drawImg)
                 cv.waitKey(1)
-        else:
-            frameNum += 1
 
         # -------------------- CORE -------------------- #
         startTime = time.time()
@@ -113,7 +109,7 @@ if __name__ == "__main__":
         gray = np.float32(gray) / 255
 
         # do tracking
-        if frameNum == 1:
+        if frameNum == 0:
             if INITIAL_BOX is None: # <- debug
                 w = initialBox[2] - initialBox[0]
                 h = initialBox[3] - initialBox[1]
@@ -145,7 +141,7 @@ if __name__ == "__main__":
             cv.resizeWindow(winName, frame.shape[1], frame.shape[0])
             cv.imshow(winName, frame)
 
-        if File is not None:
+        if File is not None and param['est'].size > 0:
             true = [ float(val) for val in File.readline().split() ]
             Error += np.linalg.norm(param['est'] - np.array(true))
             print(Error)
