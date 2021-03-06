@@ -139,7 +139,8 @@ def makeDetailedFrame(fno, frame, tmpl, param, patchSize, timeElapsed = 0.0):
 def drawEstimatedRect(img, param, patchSize):
     rrectParam = param['est']
     rrectW = rrectParam[2]*patchSize[0]
-    rrectH = rrectW*rrectParam[4]
-    rrect = ((rrectParam[0], rrectParam[1]), (rrectW, rrectH), rrectParam[3])
+    rrectH = rrectW*rrectParam[3]
+    rrectAngle = -rad2deg(rrectParam[4]) if rrectParam.size > 4 else 0.0
+    rrect = ((rrectParam[0], rrectParam[1]), (rrectW, rrectH), rrectAngle)
     rrectBox = np.int0( cv.boxPoints(rrect) )
     cv.drawContours(img, [rrectBox], 0 ,(0, 0, 255), 2)

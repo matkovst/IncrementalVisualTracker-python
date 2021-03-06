@@ -40,6 +40,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Incremental visual tracker.')
     parser.add_argument('-i', '--input', metavar='Input', type=str, help='input file')
     parser.add_argument('-d', '--debug', metavar='Debug', type=int, help='do show debug')
+    parser.add_argument('-r', '--record', metavar='Record', type=int, help='do record', default = 0)
     parser.add_argument('-t', '--test', metavar='Test', type=int, help='do test', default = 0)
     args = parser.parse_args()
 
@@ -131,15 +132,20 @@ if __name__ == "__main__":
         # --------------------- VIZ -------------------- #
         if args.debug:
             debugFrame = makeDetailedFrame(frameNum, frame, tmpl, param, (TMPLSIZE, TMPLSIZE), endTime)
-            if writer is None:
-                writer = cv.VideoWriter('output/output.avi', cv.VideoWriter_fourcc('M','J','P','G'), 20, (debugFrame.shape[1], debugFrame.shape[0]))
-            writer.write(debugFrame)
             cv.resizeWindow(winName, debugFrame.shape[1], debugFrame.shape[0])
             cv.imshow(winName, debugFrame)
+            if writer is None and args.record:
+                writer = cv.VideoWriter('output/output.avi', cv.VideoWriter_fourcc('M','J','P','G'), 20, (debugFrame.shape[1], debugFrame.shape[0]))
+            if args.record:
+                writer.write(debugFrame)
         else:
             drawEstimatedRect(frame, param, (TMPLSIZE, TMPLSIZE))
             cv.resizeWindow(winName, frame.shape[1], frame.shape[0])
             cv.imshow(winName, frame)
+            if writer is None and args.record:
+                writer = cv.VideoWriter('output/output.avi', cv.VideoWriter_fourcc('M','J','P','G'), 20, (frame.shape[1], frame.shape[0]))
+            if args.record:
+                writer.write(frame)
 
         if File is not None and param['est'].size > 0:
             true = [ float(val) for val in File.readline().split() ]

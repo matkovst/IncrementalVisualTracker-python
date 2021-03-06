@@ -58,14 +58,14 @@ INITIAL_BOX = np.array([160, 106, 62, 78, -0.02])
 # My custom overriden parameters used here for convenience
 INITIAL_BOX = None
 TMPLSIZE = 32
-NSAMPLES = 200
+NSAMPLES = 100
 MAXBASIS = 16
 BATCHSIZE = 5
 CONDENSSIG = 0.75
 FORGETTING = 0.99
 RESIZE_RATE = 0.25
 DOF = 4
-AFFSIG = np.array([5, 5, .002, .002])
+AFFSIG = np.array([4, 4, .1, .02])
 
 
 # -------------------- Model dynamics --------------------
