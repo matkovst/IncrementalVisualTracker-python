@@ -36,13 +36,12 @@ def warpimg(img, p, sz):
         sz = img.shape
     if len(p.shape) == 1:
         p = np.reshape(p, (1, p.size))
-    tmplsize = sz[0]
     
     cx = p[:, 0]
     cy = p[:, 1]
-    angle = p[:, 4]
-    width = p[:, 2] * tmplsize
-    height = width * p[:, 3]
+    width = p[:, 2] * sz[0]
+    height = p[:, 3] * width
+    angle = p[:, 4] if p.size > 4 else 0.0
     return subimage(img, (cx, cy), width, height, sz, angle)
 
 def warpimgs(img, p, sz):
@@ -50,16 +49,15 @@ def warpimgs(img, p, sz):
         sz = img.shape
     if len(p.shape) == 1:
         p = np.reshape(p, (1, p.size))
-    tmplsize = sz[0]
     
     nsamples = p.shape[0]
-    wimgs = np.zeros((tmplsize, tmplsize, nsamples))
+    wimgs = np.zeros((sz[0], sz[1], nsamples))
 
     cx = p[:, 0]
     cy = p[:, 1]
-    angle = p[:, 4]
-    width = ( p[:, 2] * tmplsize )
-    height = ( p[:, 3] * width )
+    width = p[:, 2] * sz[0]
+    height = p[:, 3] * width
+    angle = p[:, 4] if p[0, :].size > 4 else np.full(nsamples, 0.0)
     for i in range(nsamples):
         wimgs[:,:,i] = subimage(img, (cx[i], cy[i]), width[i], height[i], sz, angle[i])
     return wimgs
@@ -99,7 +97,7 @@ def makeDetailedFrame(fno, frame, tmpl, param, patchSize, timeElapsed = 0.0):
     rrectParam = param['est']
     rrectW = rrectParam[2]*patchSize[0]
     rrectH = rrectW*rrectParam[3]
-    rrectAngle = -rad2deg(rrectParam[4])
+    rrectAngle = -rad2deg(rrectParam[4]) if rrectParam.size > 4 else 0.0
     rrect = ((rrectParam[0], rrectParam[1]), (rrectW, rrectH), rrectAngle)
     rrectBox = np.int0( cv.boxPoints(rrect) )
     cv.drawContours(originalFrame, [rrectBox], 0 ,(0, 0, 255), 2)

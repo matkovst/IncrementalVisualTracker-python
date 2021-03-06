@@ -77,6 +77,7 @@ if __name__ == "__main__":
     writer = None
     ret, frame0 = capture.read()
     frame0 = cv.resize(frame0, (0, 0), None, RESIZE_RATE, RESIZE_RATE)
+    cv.resizeWindow(winName, frame0.shape[1], frame0.shape[0])
 
     frameNum = 0
     Error = 0.0
