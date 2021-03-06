@@ -4,7 +4,6 @@ import time
 import argparse
 from src.tracker import *
 from src.model_specific import *
-np.random.seed(0) # <- for testing only
 
 
 winName = 'IVT Tracker demo'
@@ -47,13 +46,14 @@ if __name__ == "__main__":
     File = None
     if args.test == 1:
         try:
+            np.random.seed(0) # <- for testing only
             File = open("tests/matlab-data.txt", "r") # <- for testing
         except:
             print("[INFO] Skip tests")
 
     # Create tracker
     tracker = IncrementalTracker(
-        dof = 6,
+        dof = DOF,
         affsig = AFFSIG, 
         nsamples = NSAMPLES,
         condenssig = CONDENSSIG, 
@@ -90,17 +90,20 @@ if __name__ == "__main__":
             print("[INFO] Video ended")
             break
         
-        while frameNum == 0 or mousedown:
-            drawImg = frame.copy()
-            cv.putText(drawImg, "Draw box around target object", (10, 20), cv.FONT_HERSHEY_PLAIN, 1.1, (0, 0, 255))
-            if mouseupdown:
-                frameNum += 1
-            cv.rectangle(drawImg,
-                    (int(initialBox[0]), int(initialBox[1])),
-                    (int(initialBox[2]), int(initialBox[3])),
-                    [0,0,255], 2)
-            cv.imshow(winName, drawImg)
-            cv.waitKey(1)
+        if INITIAL_BOX is None:
+            while frameNum == 0 or mousedown:
+                drawImg = frame.copy()
+                cv.putText(drawImg, "Draw box around target object", (10, 20), cv.FONT_HERSHEY_PLAIN, 1.1, (0, 0, 255))
+                if mouseupdown:
+                    frameNum += 1
+                cv.rectangle(drawImg,
+                        (int(initialBox[0]), int(initialBox[1])),
+                        (int(initialBox[2]), int(initialBox[3])),
+                        [0,0,255], 2)
+                cv.imshow(winName, drawImg)
+                cv.waitKey(1)
+        else:
+            frameNum += 1
 
         # -------------------- CORE -------------------- #
         startTime = time.time()
@@ -110,12 +113,13 @@ if __name__ == "__main__":
 
         # do tracking
         if frameNum == 1:
-            w = initialBox[2] - initialBox[0]
-            h = initialBox[3] - initialBox[1]
-            cx = initialBox[0] + int(w/2)
-            cy = initialBox[1] + int(h/2)
-            box = np.array([cx, cy, w, h], dtype = np.float32)
-            if INITIAL_BOX is not None: # <- debug
+            if INITIAL_BOX is None: # <- debug
+                w = initialBox[2] - initialBox[0]
+                h = initialBox[3] - initialBox[1]
+                cx = initialBox[0] + int(w/2)
+                cy = initialBox[1] + int(h/2)
+                box = np.array([cx, cy, w, h], dtype = np.float32)
+            else:
                 box = INITIAL_BOX
             est = tracker.track(gray, box)
         else:

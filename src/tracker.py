@@ -76,10 +76,32 @@ def sklm(data, tmpl, ff):
 
     return U, D, mu, n
 
-
 class IncrementalTracker():
+    """Incremental robust self-learning algorithm for visual tracking.
 
-    def __init__(self, dof, affsig, nsamples = 600, condenssig = 0.75, forgetting = 0.95, batchsize = 5, tmplShape = (32, 32), maxbasis = 16, errfunc = 'L2'):
+        Attributes
+        ----------
+        dof : int
+            degrees of freedom of object state
+        affsig : ndarray
+            stdevs of dynamic process
+        nsamples : int
+            number of particles
+        condenssig : float
+            stdev of observation likelihood
+        forgetting : float
+            forgetting factor for PCA
+        batchsize : int
+            size of frames after which do PCA update
+        tmplShape : tuple
+            size of object window for PCA
+        maxbasis : int
+            number of eigenvectors for PCA
+        errfunc : str
+            error function for minimizing the effect of noisy pixels
+    """
+
+    def __init__(self, dof, affsig, nsamples=100, condenssig=0.75, forgetting=0.95, batchsize=5, tmplShape=(32, 32), maxbasis=16, errfunc='L2'):
         self.nsamples = nsamples
         self.condenssig = condenssig
         self.forgetting = forgetting
@@ -89,6 +111,8 @@ class IncrementalTracker():
         self.maxbasis = maxbasis
         self.errfunc = errfunc
 
+        if dof < 4:
+            sys.exit('ValueError: dof must be greater or equal 4')
         if dof != affsig.size:
             sys.exit('ValueError: dof and affsig size must be the same')
         self.affsig = affsig
@@ -107,8 +131,8 @@ class IncrementalTracker():
         self.diff = np.zeros((self.tmplSize, self.nsamples), dtype = np.float32)
         self.param['conf'] = np.full(self.nsamples, 1./self.nsamples, dtype = np.float32)
 
-    # Initialize tracker
     def init(self, gray, initialBox):
+        """Initialize tracker."""
 
         if self.trackerInitialized:
             return
@@ -117,13 +141,15 @@ class IncrementalTracker():
             sys.exit("[ERROR] Given incorrect initial box")
         
         # Parse initial state parameters
-        cx = initialBox[0]
-        cy = initialBox[1]
-        scale = initialBox[2] / self.tmplShape[0]
-        angle = initialBox[4] if initialBox.size > 4 else 0.0
-        aspectRatio = initialBox[3] / initialBox[2]
-        skew = 0
-        param0 = np.array([cx, cy, scale, angle, aspectRatio, skew], dtype=np.float32)
+        param0 = np.zeros(self.dof, dtype = np.float32)
+        param0[0] = initialBox[0] # x center
+        param0[1] = initialBox[1] # y center
+        param0[2] = initialBox[2] / self.tmplShape[0] # scale
+        param0[3] = initialBox[3] / initialBox[2] # aspect ratio
+        if self.dof > 4:
+            param0[4] = initialBox[4] if initialBox.size > 4 else 0.0 # rotation angle
+        if self.dof > 5:
+            param0[5] = 0.0 # skew (shear) angle
         
         # Set initial tracker parameters
         self.tmpl['mean'] = warpimg(gray, param0, self.tmplShape).flatten('C')
@@ -131,13 +157,14 @@ class IncrementalTracker():
         self.param['wimg'] = np.reshape( self.tmpl['mean'], self.tmplShape )
         self.trackerInitialized = True
 
-    # Track object location on frame
     def track(self, gray, initialBox = None):
+        """Track object location on given frame."""
 
         # Initialize tracker when first object box is given
         if not self.trackerInitialized and initialBox is not None:
             self.init(gray, initialBox)
 
+        # Do the condensation magic and find the most likely location
         self.estimateWarpCondensation(gray)
         
         # Do incremental update when we accumulate enough data
@@ -173,8 +200,8 @@ class IncrementalTracker():
 
         return self.param['est']
 
-    # CONDENSATION affine warp estimator
     def estimateWarpCondensation(self, gray):
+        """CONDENSATION affine warp estimator."""
 
         if 'param' not in self.param: # <- first iteration
             self.param['param'] = np.tile(self.param['est'], (self.nsamples, 1))

@@ -23,7 +23,7 @@ FORGETTING = 0.99
 # but also a little more prone to drift, and require more computation.
 BATCHSIZE = 5
 
-# DOF. Degrees of freedom of object state. Its size must be the same as AFFSIG size. Min value is 4, max value is 6.
+# DOF. Degrees of freedom of object state. Its size must coincidence with AFFSIG size. Min value is 4, max value is 6.
 # This represents [x translation, y translation, scale, aspect ratio, rotation angle, skew] dofs.
 DOF = 6
 
@@ -31,13 +31,13 @@ DOF = 6
 # the dynamics distribution, that is how much we expect the target
 # object might move from one frame to the next.  The meaning of each
 # number is as follows:
-#    AFFSIG(0) = x translation (pixels, mean is 0)
-#    AFFSIG(1) = y translation (pixels, mean is 0)
-#    AFFSIG(2) = rotation angle (radians, mean is 0)
-#    AFFSIG(3) = x scaling (pixels, mean is 1)
-#    AFFSIG(4) = y scaling (pixels, mean is 1)
-#    AFFSIG(5) = skew angle (radians, mean is 0)
-AFFSIG = np.array([5, 5, .01, .02, .002, .001])
+#    AFFSIG(0) = x translation (pixels)
+#    AFFSIG(1) = y translation (pixels)
+#    AFFSIG(2) = scale
+#    AFFSIG(3) = aspect ratio
+#    AFFSIG(4) = rotation angle (radians)
+#    AFFSIG(5) = skew angle (radians)
+AFFSIG = np.array([5, 5, .01, .002, .02, .001])
 
 # TMPLSIZE. The resolution at which the tracking window is
 # sampled, 32-by-32 pixels by default.  If your initial
@@ -52,7 +52,7 @@ MAXBASIS = 16
 RESIZE_RATE = 1.0
 
 # INITIAL_BOX. Location of the target object on the first frame.
-# None if not neccessary.
+# None if not neccessary, ndarray otherwise
 INITIAL_BOX = np.array([160, 106, 62, 78, -0.02])
 
 # My custom overriden parameters used here for convenience

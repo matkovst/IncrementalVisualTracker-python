@@ -8,20 +8,27 @@ colorMap = plt.get_cmap('jet')
 def rad2deg(rad):
     return float((rad * 180) / np.pi)
 
-def subimage(image, center, width, height, tmplsize, angle):
+def subimage(image, center, width, height, sz, angle = 0.0):
     
-    shape = ( image.shape[1], image.shape[0] )
-    deg = -rad2deg(angle) # since y-axis begins on top opencv requires negative angle for clockwise rotation
-    M = cv.getRotationMatrix2D( center, deg, 1.0 )
-    wimg = cv.warpAffine( image, M, shape )
+    wimg = image
+    cx = int(center[0])
+    cy = int(center[1])
+    width = int(width)
+    height = int(height)
+
+    if angle != 0.0:
+        shape = ( image.shape[1], image.shape[0] )
+        deg = -rad2deg(angle) # since y-axis begins on top opencv requires negative angle for clockwise rotation
+        M = cv.getRotationMatrix2D( (cx, cy), deg, 1.0 )
+        wimg = cv.warpAffine( image, M, shape )
     
-    x1 = int( center[0] - width/2 )
-    y1 = int( center[1] - height/2 )
+    x1 = int( cx - width/2 )
+    y1 = int( cy - height/2 )
     x1 = x1 if x1 >= 0 else 0
     y1 = y1 if y1 >= 0 else 0
     wimg = wimg[ y1:y1+height, x1:x1+width ]
 
-    wimg = cv.resize(wimg, (tmplsize, tmplsize), None, cv.INTER_LINEAR, cv.BORDER_CONSTANT, 0)
+    wimg = cv.resize(wimg, sz, None, cv.INTER_LINEAR, cv.BORDER_CONSTANT, 0)
     return wimg
 
 def warpimg(img, p, sz):
@@ -31,11 +38,12 @@ def warpimg(img, p, sz):
         p = np.reshape(p, (1, p.size))
     tmplsize = sz[0]
     
-    center = (p[:, 0], p[:, 1])
-    angle = p[:, 3]
-    width = int(p[:, 2]*tmplsize)
-    height = int(width * p[:, 4])
-    return subimage(img, center, int(width), int(height), tmplsize, angle)
+    cx = p[:, 0]
+    cy = p[:, 1]
+    angle = p[:, 4]
+    width = p[:, 2] * tmplsize
+    height = width * p[:, 3]
+    return subimage(img, (cx, cy), width, height, sz, angle)
 
 def warpimgs(img, p, sz):
     if not all(sz):
@@ -45,14 +53,20 @@ def warpimgs(img, p, sz):
     tmplsize = sz[0]
     
     nsamples = p.shape[0]
-    center = (p[:, 0], p[:, 1])
-    angle = p[:, 3]
-    width = ( p[:, 2] * tmplsize )
-    height = ( p[:, 4] * width )
     wimgs = np.zeros((tmplsize, tmplsize, nsamples))
+
+    cx = p[:, 0]
+    cy = p[:, 1]
+    angle = p[:, 4]
+    width = ( p[:, 2] * tmplsize )
+    height = ( p[:, 3] * width )
     for i in range(nsamples):
-        wimgs[:,:,i] = subimage(img, (int(center[0][i]), int(center[1][i])), int(width[i]), int(height[i]), tmplsize, angle[i])
+        wimgs[:,:,i] = subimage(img, (cx[i], cy[i]), width[i], height[i], sz, angle[i])
     return wimgs
+
+    # for i in range(nsamples):
+    #     wimgs[:,:,i] = warpimg(img, p[i, :], sz)
+    # return wimgs
 
 def convert(img, target_type_min, target_type_max, target_type):
     imin = np.min(img)
@@ -84,8 +98,9 @@ def makeDetailedFrame(fno, frame, tmpl, param, patchSize, timeElapsed = 0.0):
     
     rrectParam = param['est']
     rrectW = rrectParam[2]*patchSize[0]
-    rrectH = rrectW*rrectParam[4]
-    rrect = ((rrectParam[0], rrectParam[1]), (rrectW, rrectH), -rad2deg(rrectParam[3]))
+    rrectH = rrectW*rrectParam[3]
+    rrectAngle = -rad2deg(rrectParam[4])
+    rrect = ((rrectParam[0], rrectParam[1]), (rrectW, rrectH), rrectAngle)
     rrectBox = np.int0( cv.boxPoints(rrect) )
     cv.drawContours(originalFrame, [rrectBox], 0 ,(0, 0, 255), 2)
     cv.drawContours(detailedFrame, [rrectBox], 0 ,(255, 127, 0), 2)
