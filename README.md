@@ -11,3 +11,5 @@ The code was mostly grounded on the original MATLAB-implementation posted in htt
 
 ## Run
 `python demo.py --input <path_to_video> [--debug <int>] [--record <int>]`
+
+You can tune tracker parameters for your video by changing [model_specific.py](https://github.com/matkovst/IncrementalVisualTracker-python/blob/master/src/model_specific.py) file
