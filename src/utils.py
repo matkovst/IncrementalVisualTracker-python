@@ -11,10 +11,10 @@ def rad2deg(rad):
 def subimage(image, center, width, height, sz, angle = 0.0):
     
     wimg = image
-    cx = int(center[0])
-    cy = int(center[1])
-    width = int(width)
-    height = int(height)
+    cx = int(np.round(center[0]))
+    cy = int(np.round(center[1]))
+    width = int(np.round(width))
+    height = int(np.round(height))
 
     if angle != 0.0:
         shape = ( image.shape[1], image.shape[0] )
@@ -32,39 +32,22 @@ def subimage(image, center, width, height, sz, angle = 0.0):
     return wimg
 
 def warpimg(img, p, sz):
-    if not all(sz):
-        sz = img.shape
-    if len(p.shape) == 1:
-        p = np.reshape(p, (1, p.size))
-    
-    cx = p[:, 0]
-    cy = p[:, 1]
-    width = p[:, 2] * sz[0]
-    height = p[:, 3] * width
-    angle = p[:, 4] if p.size > 4 else 0.0
+    cx = p[0]
+    cy = p[1]
+    width = p[2] * sz[0]
+    height = p[3] * width
+    angle = p[4] if p.size > 4 else 0.0
     return subimage(img, (cx, cy), width, height, sz, angle)
 
 def warpimgs(img, p, sz):
-    if not all(sz):
-        sz = img.shape
     if len(p.shape) == 1:
-        p = np.reshape(p, (1, p.size))
+        p = np.expand_dims(p, 0)
     
     nsamples = p.shape[0]
     wimgs = np.zeros((sz[0], sz[1], nsamples))
-
-    cx = p[:, 0]
-    cy = p[:, 1]
-    width = p[:, 2] * sz[0]
-    height = p[:, 3] * width
-    angle = p[:, 4] if p[0, :].size > 4 else np.full(nsamples, 0.0)
     for i in range(nsamples):
-        wimgs[:,:,i] = subimage(img, (cx[i], cy[i]), width[i], height[i], sz, angle[i])
+        wimgs[:,:,i] = warpimg(img, p[i, :], sz)
     return wimgs
-
-    # for i in range(nsamples):
-    #     wimgs[:,:,i] = warpimg(img, p[i, :], sz)
-    # return wimgs
 
 def convert(img, target_type_min, target_type_max, target_type):
     imin = np.min(img)

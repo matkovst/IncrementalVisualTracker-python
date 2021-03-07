@@ -1,9 +1,13 @@
+import os
 import numpy as np
 import cv2 as cv
 import time
 import argparse
 from src.tracker import *
 from src.model_specific import *
+
+if not os.path.exists('output'):
+    os.makedirs('output')
 
 
 winName = 'IVT Tracker demo'
@@ -39,7 +43,7 @@ if __name__ == "__main__":
     # Parse command line params
     parser = argparse.ArgumentParser(description='Incremental visual tracker.')
     parser.add_argument('-i', '--input', metavar='Input', type=str, help='input file')
-    parser.add_argument('-d', '--debug', metavar='Debug', type=int, help='do show debug')
+    parser.add_argument('-d', '--debug', metavar='Debug', type=int, help='do show debug', default = 0)
     parser.add_argument('-r', '--record', metavar='Record', type=int, help='do record', default = 0)
     parser.add_argument('-t', '--test', metavar='Test', type=int, help='do test', default = 0)
     args = parser.parse_args()
@@ -147,7 +151,7 @@ if __name__ == "__main__":
             if args.record:
                 writer.write(frame)
 
-        if File is not None and param['est'].size > 0:
+        if File is not None:
             true = [ float(val) for val in File.readline().split() ]
             Error += np.linalg.norm(param['est'] - np.array(true))
             print(Error)
