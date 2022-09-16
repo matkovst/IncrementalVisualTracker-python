@@ -8,8 +8,35 @@ colorMap = plt.get_cmap('jet')
 def rad2deg(rad):
     return float((rad * 180) / np.pi)
 
+def clip(x, a, b):
+    if x < a:
+        return a
+    elif x > b:
+        return b
+    return x
+
 def subimage(image, center, width, height, sz, angle = 0.0):
+    """Get subimage from input image.
+
+        Attributes
+        ----------
+        image : ndarray
+            input image
+        center : tuple
+            state center
+        width : float
+            state width
+        height : float
+            state height
+        sz : tuple
+            size of object window for PCA
+        angle : tuple
+            state angle
+    """
     
+    imageWidth = image.shape[1]
+    imageHeight = image.shape[0]
+
     wimg = image
     cx = int(np.round(center[0]))
     cy = int(np.round(center[1]))
@@ -17,21 +44,46 @@ def subimage(image, center, width, height, sz, angle = 0.0):
     height = int(np.round(height))
 
     if angle != 0.0:
-        shape = ( image.shape[1], image.shape[0] )
+        shape = (image.shape[1], image.shape[0])
         deg = -rad2deg(angle) # since y-axis begins on top opencv requires negative angle for clockwise rotation
         M = cv.getRotationMatrix2D( (cx, cy), deg, 1.0 )
         wimg = cv.warpAffine( image, M, shape )
-    
-    x1 = int( cx - width/2 )
-    y1 = int( cy - height/2 )
-    x1 = x1 if x1 >= 0 else 0
-    y1 = y1 if y1 >= 0 else 0
-    wimg = wimg[ y1:y1+height, x1:x1+width ]
 
+    x1 = int(cx - width/2)
+    y1 = int(cy - height/2)
+    x2 = int(x1 + width)
+    y2 = int(y1 + height)
+    box = np.array([x1, y1, x2, y2])
+    if x1 < 0:
+        box[0] += abs(x1)
+        box[2] += abs(x1)
+    if x2 >= imageWidth:
+        box[0] -= (x2 - imageWidth + 1)
+        box[2] -= (x2 - imageWidth + 1)
+    if y1 < 0:
+        box[1] += abs(y1)
+        box[3] += abs(y1)
+    if y2 >= imageHeight:
+        box[1] -= (y2 - imageHeight + 1)
+        box[3] -= (y2 - imageHeight + 1)
+
+    wimg = wimg[box[1]:box[3], box[0]:box[2]]
     wimg = cv.resize(wimg, sz, None, cv.INTER_LINEAR, cv.BORDER_CONSTANT, 0)
     return wimg
 
 def warpimg(img, p, sz):
+    """Warp image.
+
+        Attributes
+        ----------
+        img : ndarray
+            input image
+        p : ndarray
+            state params
+        sz : tuple
+            size of object window for PCA
+    """
+
     cx = p[0]
     cy = p[1]
     width = p[2] * sz[0]
@@ -40,6 +92,18 @@ def warpimg(img, p, sz):
     return subimage(img, (cx, cy), width, height, sz, angle)
 
 def warpimgs(img, p, sz):
+    """Warp images.
+
+        Attributes
+        ----------
+        img : ndarray
+            input image
+        p : ndarray
+            state params
+        sz : tuple
+            size of object window for PCA
+    """
+
     if len(p.shape) == 1:
         p = np.expand_dims(p, 0)
     
@@ -69,7 +133,7 @@ def makeDetailedFrame(fno, frame, tmpl, param, patchSize, timeElapsed = 0.0):
             if math.isnan(prob):
                 prob = 0.0
             colorizedProb = np.array( colorMap( int(prob * 255) )[:-1][::-1] ) * 255
-            cv.circle(detailedFrame, (cx, cy), 1, colorizedProb)
+            cv.circle(detailedFrame, (int(cx), int(cy)), 1, colorizedProb)
     hOffset = 20
     cv.putText(originalFrame, str(frame.shape[1]) + 'x' + str(frame.shape[0]), (10, 1*hOffset), cv.FONT_HERSHEY_PLAIN, 1.2, (0, 0, 255))
     cv.putText(detailedFrame, "frame no: " + str(fno), (10, 1*hOffset), cv.FONT_HERSHEY_PLAIN, 1.2, (255, 127, 0))

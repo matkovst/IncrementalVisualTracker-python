@@ -3,89 +3,105 @@ import numpy as np
 from .utils import *
 from .model_specific import *
 
-# Incremental SVD algorithm
-def sklm(data, tmpl, ff):
-    
-    U0 = tmpl['basis']
-    D0 = tmpl['eigval']
-    mu0 = tmpl['mean']
-    n0 = tmpl['nsamples']
+np.random.seed(241)
 
-    N = data[0].size
-    n = len(data)
-    data = np.swapaxes( np.array(data), 0, 1 )
-    U = np.zeros((N, n), dtype=np.float32)
-    D = np.zeros(n, dtype=np.float32)
+def sklm(dataList, tmpl, ff):
+    """Sequential Karhunen-Loeve Transform.
+
+        Attributes
+        ----------
+        dataList : list
+            initial/additional data
+        tmpl : dict
+            template params
+        ff : float
+            forgetting factor
+
+        Return
+        ----------
+        U : ndarray
+            new basis of size (N,d+n)
+        D : ndarray
+            new singular values of size (d+n,1)
+        mu : ndarray
+            new mean of size (N,1)
+        m : ndarray
+            new number of data
+    """
+    
+    U0 = tmpl['basis']      # old basis
+    D0 = tmpl['eigval']     # old singular values
+    mu0 = tmpl['mean']      # old sample mean
+    n0 = tmpl['nsamples']   # number of previous data
+
+    N = dataList[0].size
+    m = len(dataList)
+    data = np.array(dataList).T
+    U = np.zeros((N, m), dtype=np.float32)
+    D = np.zeros(m, dtype=np.float32)
     mu = np.zeros(N, dtype=np.float32)
 
-    if U0 is None:
-        if n == 1:
-            mu = data[0].copy()
-            U = np.zeros(N, dtype = np.float32)
-            U[0] = 1
-        else:
-            mu = np.mean(data, axis = 1)
-            dataCentered = np.zeros(data.shape, dtype=np.float32)
-            for i in range(n):
-                dataCentered[:, i] = data[:, i] - mu
+    if U0.shape[1] == 0: # first eigenbasis calculation
 
-            U, D, V = np.linalg.svd(dataCentered, full_matrices = False)
-        # if nargin >= 7
-        #     keep = 1:min(K,length(D));
-        #     D = D(keep);
-        #     U = U(:,keep);
-        # end
-    else:
-        mu1 = np.mean(data, axis = 1)
-        dataCentered = np.zeros(data.shape, dtype=np.float32)
-        for i in range(n):
-            dataCentered[:, i] = data[:, i] - mu1
+        mu = np.mean(data, axis = 1, dtype = np.float32)
+        zeroMeanData = np.zeros(data.shape, dtype=np.float32)
+        for i in range(m):
+            zeroMeanData[:, i] = data[:, i] - mu
+        U, D, _ = np.linalg.svd(zeroMeanData, full_matrices = False)
 
-        # Compute Ic = (fn/(fn+m))Ia + (m/(fn+m))Ib
-        Ic = ((ff*n0)*mu0 + n*mu1)/(n+ff*n0)
+    else: # incremental update of eigenbasis
+
+        mu1 = np.mean(data, axis = 1, dtype = np.float32)
+        zeroMeanData = np.zeros(data.shape, dtype=np.float32)
+        for i in range(m):
+            zeroMeanData[:, i] = data[:, i] - mu1
+
+        # Compute new mean Ic = (fn/(fn+m))Ia + (m/(fn+m))Ib
+        acoeff = (ff*n0) / ((ff*n0) + m)
+        bcoeff = m / ((ff*n0) + m)
+        mu = acoeff*mu0 + bcoeff*mu1
 
         # Compute B{^} = [ (I_m+1 - Ib) ... (I_n+m - Ib) sqrt(nm/(n+m))(Ib - Ia) ]
-        B = np.zeros((N, n + 1), dtype=np.float32)
-        B[:, 0:n] = dataCentered
-        B[:, n:n+1] = np.expand_dims( np.sqrt( (n * n0)/(n + n0) ) * (mu0 - mu1), axis = 1 )
-        dataCentered = B.copy()
-        mu = np.reshape( Ic, mu0.shape )
-        # mu = reshape((ff*n0*mu0(:) + n*mu1)/(n+ff*n0), size(mu0));
-        n = n + ff*n0
+        harmean = (m * n0) / float(m + n0)
+        B = np.zeros((N, m + 1), dtype=np.float32)
+        B[:, 0:m] = zeroMeanData
+        B[:, m:m+1] = np.expand_dims( np.sqrt(harmean) * (mu1 - mu0), axis = 1 )
+        m = m + ff*n0
 
-        data_proj = np.matmul(U0.T, dataCentered)
-        data_res = dataCentered - np.matmul(U0, data_proj)
-        q, dummy = np.linalg.qr(data_res)
-        Q = np.hstack( (U0, q) )
+        Bproj = (U0.T @ B)
+        Bdiff = B - (U0 @ Bproj)
+        Borth, _ = np.linalg.qr(Bdiff)
+        Q = np.hstack( (U0, Borth) )
 
-        t1 = np.diag(D0) * ff
-        t2 = data_proj
-        t3 = np.zeros((dataCentered.shape[1], D0.size))
-        t4 = np.matmul(q.T, data_res)
+        # Compute R
+        t1 = np.diag(D0 * ff)
+        t2 = Bproj
+        t3 = np.zeros((B.shape[1], D0.size))
+        t4 = (Borth.T @ Bdiff)
         R = np.zeros((t1.shape[0] + t3.shape[0], t1.shape[1] + t2.shape[1]), dtype = np.float32)
         R[0:t1.shape[0], 0:t1.shape[1]] = t1
         R[0:t2.shape[0], t1.shape[1]:t1.shape[1] + t2.shape[1]] = t2
         R[t1.shape[0]:t1.shape[0] + t3.shape[0], 0:t3.shape[1]] = t3
         R[t1.shape[0]:t1.shape[0] + t4.shape[0], t3.shape[1]:t3.shape[1] + t4.shape[1]] = t4
 
-        U, D, V = np.linalg.svd(R, full_matrices = False)
-        cutoff = np.sum(np.power(D, 2)) * 0.000001
-        keep = np.power(D, 2) >= cutoff
+        # Compute the SVD of R
+        U, D, _ = np.linalg.svd(R, full_matrices = False)
+        cutoff = cv.norm(D) * 0.001
+        keep = (D >= cutoff)
         D = D[keep]
         U = np.matmul(Q, U[:, keep])
 
-    return U, D, mu, n
+    return U, D, mu, m
+
 
 class IncrementalTracker():
     """Incremental robust self-learning algorithm for visual tracking.
 
         Attributes
         ----------
-        dof : int
-            degrees of freedom of object state
         affsig : ndarray
             stdevs of dynamic process
-        nsamples : int
+        nparticles : int
             number of particles
         condenssig : float
             stdev of observation likelihood
@@ -101,35 +117,57 @@ class IncrementalTracker():
             error function for minimizing the effect of noisy pixels
     """
 
-    def __init__(self, dof, affsig, nsamples=100, condenssig=0.75, forgetting=0.95, batchsize=5, tmplShape=(32, 32), maxbasis=16, errfunc='L2'):
-        self.nsamples = nsamples
+    def __init__(self, affsig, nparticles=100, condenssig=0.75, forgetting=0.95, batchsize=5, tmplShape=(32, 32), maxbasis=16, errfunc='L2'):
+        self.nparticles = nparticles
         self.condenssig = condenssig
         self.forgetting = forgetting
         self.batchsize = batchsize
         self.tmplShape = tmplShape
-        self.tmplSize = self.tmplShape[0]*self.tmplShape[1]
+        self.tmplDim = self.tmplShape[0]*self.tmplShape[1]
         self.maxbasis = maxbasis
         self.errfunc = errfunc
 
-        if dof < 4:
-            sys.exit('ValueError: dof must be greater or equal 4')
-        if dof != affsig.size:
-            sys.exit('ValueError: dof and affsig size must be the same')
+        # dummyData = []
+        # for i in range(5):
+        #     dummyData.append(np.ones(9, dtype=np.float32) * i)
+        # dummyTmpl = {
+        #     'mean'      : np.zeros((self.tmplDim,), dtype=np.float32),     # sample mean of the images (1024,)
+        #     'basis'     : np.zeros((self.tmplDim, 0), dtype=np.float32),   # eigenbasis (1024, MAXBASIS)
+        #     'eigval'    : np.array([]),                                     # eigenvalues (MAXBASIS,)
+        #     'nsamples'  : 0,                                                # effective number of data
+        # }
+        # U,D,mu,m = sklm(dummyData, dummyTmpl, self.forgetting)
+        # dummyTmpl['basis'] = U
+        # dummyTmpl['eigval'] = D
+        # dummyTmpl['mean'] = mu
+        # dummyTmpl['nsamples'] = m
+
+        # for i in range(5):
+        #     dummyData[i] += (i+5)
+        # U,D,mu,m = sklm(dummyData, dummyTmpl, self.forgetting)
+        # sys.exit()
+
         self.affsig = affsig
-        self.dof = self.affsig.size # <- degrees of freedom
+        self.dof = self.affsig.size # degrees of freedom
+        if self.dof < 4:
+            sys.exit('ValueError: dof must be greater or equal 4')
+        if self.dof != affsig.size:
+            sys.exit('ValueError: dof and affsig size must be the same')
 
         self.trackerInitialized = False
         self.param = {}
-        self.tmpl = {}
-        self.tmpl['basis'] = None
-        self.tmpl['eigval'] = np.array([])
-        self.tmpl['nsamples'] = 0
-        self.tmpl['reseig'] = 0
+        self.tmpl = {
+            'mean'      : np.zeros((self.tmplDim,), dtype=np.float32),      # sample mean of the images (1024,)
+            'basis'     : np.zeros((self.tmplDim, 0), dtype=np.float32),    # eigenbasis (1024, MAXBASIS)
+            'eigval'    : np.array([]),                                     # eigenvalues (MAXBASIS,)
+            'nsamples'  : 0,                                                # effective number of data
+            'reseig'    : 0
+        }
         self.wimgs = []
 
         # Auxilary for optimization
-        self.diff = np.zeros((self.tmplSize, self.nsamples), dtype = np.float32)
-        self.param['conf'] = np.full(self.nsamples, 1./self.nsamples, dtype = np.float32)
+        self.diff = np.zeros((self.tmplDim, self.nparticles), dtype = np.float32)
+        self.param['conf'] = np.full(self.nparticles, 1./self.nparticles, dtype = np.float32)
 
     def init(self, gray, initialBox):
         """Initialize tracker."""
@@ -138,9 +176,9 @@ class IncrementalTracker():
             return
 
         if initialBox.size < 4:
-            sys.exit("[ERROR] Given incorrect initial box")
+            sys.exit("init: Given empty box")
         
-        # Parse initial state parameters
+        # Make initial state parameters
         param0 = np.zeros(self.dof, dtype = np.float32)
         param0[0] = initialBox[0] # x center
         param0[1] = initialBox[1] # y center
@@ -152,15 +190,16 @@ class IncrementalTracker():
             param0[5] = 0.0 # skew (shear) angle
         
         # Set initial tracker parameters
-        self.tmpl['mean'] = warpimg(gray, param0, self.tmplShape).flatten('C')
-        self.param['est'] = param0
-        self.param['wimg'] = np.reshape( self.tmpl['mean'], self.tmplShape )
+        mean2d = warpimg(gray, param0, self.tmplShape)
+        self.tmpl['mean'] = mean2d.flatten('C').copy()
+        self.param['est'] = param0.copy()
+        self.param['wimg'] = mean2d.copy()
         self.trackerInitialized = True
 
     def track(self, gray, initialBox = None):
         """Track object location on given frame."""
 
-        # Initialize tracker when first object box is given
+        # Initialize tracker when the first object box is given
         if not self.trackerInitialized and initialBox is not None:
             self.init(gray, initialBox)
 
@@ -170,19 +209,17 @@ class IncrementalTracker():
         # Do incremental update when we accumulate enough data
         if len(self.wimgs) >= self.batchsize:
             if 'coef' in self.param:
-                ncoef = self.param['coef'].shape[1]
-                recon = np.tile(np.expand_dims(self.tmpl['mean'], axis=1), (1, self.nsamples)) + \
-                    np.matmul( self.tmpl['basis'], self.param['coef'] )
+                UUTDiff = (self.tmpl['basis'] @ self.param['coef'])
+                recon = (UUTDiff.T + self.tmpl['mean']).T
+
                 basis, eigval, mean, nsamples = sklm(self.wimgs, self.tmpl, self.forgetting)
                 self.tmpl['basis'] = basis
                 self.tmpl['eigval'] = eigval
                 self.tmpl['mean'] = mean
                 self.tmpl['nsamples'] = nsamples
 
-                tmp = np.zeros((self.tmplSize, ncoef), dtype=np.float32)
-                for i in range(ncoef):
-                    tmp[:, i] = recon[:, i] - self.tmpl['mean']
-                self.param['coef'] = np.matmul( self.tmpl['basis'].T, tmp )
+                recon = (recon.T - self.tmpl['mean']).T
+                self.param['coef'] = (self.tmpl['basis'].T @ recon)
             else:
                 basis, eigval, mean, nsamples = sklm(self.wimgs, self.tmpl, self.forgetting)
                 self.tmpl['basis'] = basis
@@ -191,7 +228,8 @@ class IncrementalTracker():
                 self.tmpl['nsamples'] = nsamples
             self.wimgs = []
 
-            if self.tmpl['basis'].shape[1] > self.maxbasis:
+            nCurrentEigenvectors = self.tmpl['basis'].shape[1]
+            if nCurrentEigenvectors > self.maxbasis:
                 self.tmpl['reseig'] = self.forgetting * self.tmpl['reseig'] + np.sum( np.power(self.tmpl['eigval'][self.maxbasis:self.tmpl['eigval'].size], 2) )
                 self.tmpl['basis'] = self.tmpl['basis'][:, 0:self.maxbasis]
                 self.tmpl['eigval'] = self.tmpl['eigval'][0:self.maxbasis]
@@ -201,52 +239,60 @@ class IncrementalTracker():
         return self.param['est']
 
     def estimateWarpCondensation(self, gray):
-        """CONDENSATION affine warp estimator."""
+        """CONDENSATION affine warp estimator. It looks for the most likely particle"""
 
-        if 'param' not in self.param: # <- first iteration
-            self.param['param'] = np.tile(self.param['est'], (self.nsamples, 1))
+        # Propagate density
+        if 'param' not in self.param: # the first iteration. Just tile initial template
+            self.param['param'] = np.tile(self.param['est'], (self.nparticles, 1))
         else:
-            # Propagate density
             cumconf = self.param['conf'].cumsum(axis = 0)
             cumconf = np.expand_dims(cumconf, axis = 1)
-            idx = np.sum(np.tile(np.random.random((1, self.nsamples)), (self.nsamples,1)) > np.tile(cumconf, (1, self.nsamples)), axis = 0)
-            idx = np.floor(idx).astype(np.int16)
-            self.param['param'] = self.param['param'][idx, :]
+            uniformNN = np.tile(np.random.random((1, self.nparticles)), (self.nparticles,1))
+            cumconfNN = np.tile(cumconf, (1, self.nparticles))
+            cdfIds = np.sum(uniformNN > cumconfNN, axis = 0).astype(np.int16)
+            self.param['param'] = self.param['param'][cdfIds, :]
 
         # Apply dynamical model
-        for i in range(self.nsamples):
-                self.param['param'][i, :] = DynamicalProcess(self.param['param'][i, :], self.affsig)
+        self.param['param'] = DynamicalProcess(self.param['param'], self.affsig)
         
         # Apply observation model
+
+        # Retrieve image patches It predicated by Xt
         _wimgs = warpimgs(gray, self.param['param'], self.tmplShape)
-        wimgsFlatten = np.reshape(_wimgs, (self.tmplSize, self.nsamples))
-        for i in range(self.nsamples):
+        wimgsFlatten = np.reshape(_wimgs, (self.tmplDim, self.nparticles))
+        for i in range(self.nparticles):
             self.diff[:, i] = wimgsFlatten[:, i] - self.tmpl['mean']
 
+        # Compute likelihood under the observation model for each patch
         coefdiff = 0
+        nCurrentEigenvectors = self.tmpl['basis'].shape[1]
+        if nCurrentEigenvectors > 0:
 
-        if self.tmpl['basis'] is not None:
-            # Compute UU.T(I - mu)
-            coef = np.matmul(self.tmpl['basis'].T, self.diff)
-            self.diff = self.diff - np.matmul(self.tmpl['basis'], coef)
-            if 'coef' in self.param:
-                # coefdiff = (abs(coef)-abs(param.coef))*tmpl.reseig./repmat(tmpl.eigval,[1,n]);
-                tmp = (np.abs(coef) - np.abs(self.param['coef'])) * self.tmpl['reseig']
-                coefdiff = tmp / np.swapaxes(np.tile( (self.tmpl['eigval']), (self.nsamples, 1) ), 0, 1 ) # <- TODO: need to test
-            else:
-                numer = coef * self.tmpl['reseig']
-                coefdiff = np.zeros(numer.shape, dtype=np.float32)
-                for i in range(self.nsamples):
-                    coefdiff[:, i] = numer[:, i] / self.tmpl['eigval']
-            self.param['coef'] = coef
+            # Compute (I - mu) - UU.T(I - mu)
+            UTDiff = (self.tmpl['basis'].T @ self.diff)
+            self.diff = self.diff - (self.tmpl['basis'] @ UTDiff)
 
+            # if 'coef' in self.param:
+            #     # coefdiff = (abs(UDiff)-abs(param.coef))*tmpl.reseig./repmat(tmpl.eigval,[1,n]);
+            #     tmp = (np.abs(UDiff) - np.abs(self.param['coef'])) * self.tmpl['reseig']
+            #     coefdiff = tmp / np.swapaxes(np.tile( (self.tmpl['eigval']), (self.nparticles, 1) ), 0, 1 ) # <- TODO: need to test
+            # else:
+            #     numer = UDiff * self.tmpl['reseig']
+            #     coefdiff = np.zeros(numer.shape, dtype=np.float32)
+            #     for i in range(self.nparticles):
+            #         coefdiff[:, i] = numer[:, i] / self.tmpl['eigval']
+            self.param['coef'] = UTDiff
+
+        diff2 = np.power(self.diff, 2)
+        prec = 1.0 / self.condenssig
         if self.errfunc == 'robust':
-            pass
+            rsig = 0.1
+            self.param['conf'] = np.exp( np.sum(diff2 / (diff2 + rsig), axis = 0).T * -prec )
         elif self.errfunc == 'ppca':
             pass
         else:
             # Compute P_dt(I | X) = exp( -|| (I - mu) - UU.T(I - mu) ||^2 )
-            self.param['conf'] = np.exp( -np.sum(np.power(self.diff, 2), axis = 0) / self.condenssig ).transpose()
+            self.param['conf'] = np.exp( np.sum(diff2, axis = 0).T * -prec )
         
         # Store most likely particle
         self.param['conf'] = self.param['conf'] / np.sum(self.param['conf'])

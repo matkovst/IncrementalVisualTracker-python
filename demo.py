@@ -13,11 +13,13 @@ if not os.path.exists('output'):
 winName = 'IVT Tracker demo'
 drawnBox = np.zeros(4)
 initialBox = np.zeros(4)
+mousexy = (0, 0)
 mousedown = False
 mouseupdown = False
 initialize = False
 def on_mouse(event, x, y, flags, params):
-    global mousedown, mouseupdown, drawnBox, initialBox, initialize
+    global mousexy, mousedown, mouseupdown, drawnBox, initialBox, initialize
+    mousexy = (x, y)
     if event == cv.EVENT_LBUTTONDOWN:
         drawnBox[[0,2]] = x
         drawnBox[[1,3]] = y
@@ -58,15 +60,14 @@ if __name__ == "__main__":
 
     # Create tracker
     tracker = IncrementalTracker(
-        dof = DOF,
         affsig = AFFSIG, 
-        nsamples = NSAMPLES,
+        nparticles = NPARTICLES,
         condenssig = CONDENSSIG, 
         forgetting = FORGETTING, 
         batchsize = BATCHSIZE, 
         tmplShape = (TMPLSIZE, TMPLSIZE), 
         maxbasis = MAXBASIS, 
-        errfunc = 'L2'
+        errfunc = 'robust' # 'L2'
     )
 
     # Init cv-window
@@ -96,7 +97,7 @@ if __name__ == "__main__":
             print("[INFO] Video ended")
             break
         
-        if INITIAL_BOX is None:
+        if INITIAL_BOX is None: # manually set initial bounding box
             while frameNum == 0 and not initialize:
                 drawImg = frame.copy()
                 cv.putText(drawImg, "Draw box around target object", (10, 20), cv.FONT_HERSHEY_PLAIN, 1.1, (0, 0, 255))
@@ -104,6 +105,8 @@ if __name__ == "__main__":
                         (int(initialBox[0]), int(initialBox[1])),
                         (int(initialBox[2]), int(initialBox[3])),
                         [0,0,255], 2)
+                cv.line(drawImg, (0, int(mousexy[1])), (drawImg.shape[1], int(mousexy[1])), (255, 255, 255), 2)
+                cv.line(drawImg, (int(mousexy[0]), 0), (int(mousexy[0]), drawImg.shape[0]), (255, 255, 255), 2)
                 cv.imshow(winName, drawImg)
                 cv.waitKey(1)
 
@@ -111,7 +114,7 @@ if __name__ == "__main__":
         startTime = time.time()
 
         gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
-        gray = np.float32(gray) / 255
+        gray = np.float32(gray) * 0.003921569
 
         # do tracking
         if frameNum == 0:
@@ -121,8 +124,14 @@ if __name__ == "__main__":
                 cx = initialBox[0] + int(w/2)
                 cy = initialBox[1] + int(h/2)
                 box = np.array([cx, cy, w, h], dtype = np.float32)
+                print("Initial box (x, y, w, h): ({0}, {1}, {2}, {3})"
+                    .format((box[0] - box[2]/2) / frame.shape[1], (box[1] - box[3]/2) / frame.shape[0], box[2] / frame.shape[1], box[3] / frame.shape[0]))
             else:
                 box = INITIAL_BOX
+                box[0] = int(box[0] * frame.shape[1])
+                box[1] = int(box[1] * frame.shape[0])
+                box[2] = int(box[2] * frame.shape[1])
+                box[3] = int(box[3] * frame.shape[0])
             est = tracker.track(gray, box)
         else:
             est = tracker.track(gray)
@@ -158,7 +167,7 @@ if __name__ == "__main__":
         # -------------------- //// -------------------- #
 
         frameNum += 1
-        key = cv.waitKey(30)
+        key = cv.waitKey(15)
         if key & 0xFF == ord('q') or key == 27:
             break
     
